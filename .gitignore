@@ -1,0 +1,12 @@
+# Personal/sensitive data - never commit these
+dataset/
+embeddings.pkl
+attendance.csv
+
+# Auto-downloaded model files (scripts re-download them automatically)
+face_detection_yunet.onnx
+face_recognition_sface.onnx
+
+# Python
+__pycache__/
+*.pyc
