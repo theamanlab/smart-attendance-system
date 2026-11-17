@@ -10,3 +10,22 @@ face_recognition_sface.onnx
 # Python
 __pycache__/
 *.pyc
+
+# Local environments and editor state
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+
+# Local test/build output
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.DS_Store
+Thumbs.db

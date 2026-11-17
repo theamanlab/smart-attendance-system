@@ -1,93 +1,158 @@
 # Smart Attendance System
 
-A webcam-based attendance system that detects and recognizes faces in real time, then automatically logs attendance to a CSV file.
+A Python computer-vision prototype that recognizes enrolled faces through a webcam and records attendance in a local CSV file.
 
-**Flow:** Webcam → Detect Face → Recognize Face → Mark Attendance (name + timestamp)
+**YuNet detection · SFace embeddings · Cosine-similarity matching · Tkinter interface**
 
-## Tech Stack
+> **Project status:** Educational prototype. This repository integrates pretrained models; it does not train a new face-recognition model. No project-specific accuracy or speed benchmark has been published yet.
 
-- Python
-- OpenCV 5 (`opencv-python`) — face detection (YuNet) and face recognition (SFace)
-- NumPy
-- Pillow (for the Tkinter UI video display)
-- Tkinter (built-in) — simple Start/Stop UI
-- CSV — attendance storage
+## What it does
 
-> **Note:** This project uses OpenCV's built-in DNN-based face detector (`FaceDetectorYN`) and recognizer (`FaceRecognizerSF`) instead of `face_recognition`/`dlib`. This avoids the CMake/Visual Studio build-tools dependency that `dlib` requires on Windows, while still giving accurate, modern face recognition.
+- Builds one reference embedding per person from local enrollment photos.
+- Detects faces and compares them against the enrolled references.
+- Labels unmatched faces as `Unknown`.
+- Writes `Name,Date,Time` to `attendance.csv`, checking for duplicate entries on the same local calendar date.
+- Offers a desktop interface with Start, Stop, and Exit controls, plus a terminal-launched OpenCV view.
 
-## Project Structure
+## How it works
 
+1. **Enrollment:** Read photos from one folder per person, detect a face with YuNet, align and crop it, and extract an SFace embedding. Average that person's embeddings and save the references to `embeddings.pkl`.
+2. **Recognition:** Detect each live face, extract its embedding, and compare it with every enrolled reference.
+3. **Decision:** Select the highest-scoring reference that meets the configured cosine threshold (`0.363` in `face_utils.py`); otherwise return `Unknown`.
+4. **Attendance:** Check the CSV for the person's name and today's date before appending a record. The camera loops also cache names already processed during the session.
+
+The similarity score is **not a probability or an accuracy percentage**. The threshold is a starting configuration and needs evaluation on the intended data.
+
+## Technology
+
+| Component | Purpose |
+| --- | --- |
+| Python | Application and attendance logic |
+| OpenCV | Webcam capture, YuNet detection, and SFace inference |
+| NumPy | Averaging enrollment embeddings |
+| Pillow and Tkinter | Desktop video display and controls |
+| CSV | Local attendance storage |
+
+## Quick start
+
+You need Python, a webcam, and a desktop environment. Internet access is needed for the initial model downloads. Run commands from the repository root so the relative data and model paths resolve correctly.
+
+### 1. Clone and create an environment
+
+```bash
+git clone https://github.com/theamanlab/smart-attendance-system.git
+cd smart-attendance-system
+python -m venv .venv
 ```
-attendance_system/
-├── face_utils.py           # Shared helper functions for detection/recognition
-├── enroll_faces.py         # Builds embeddings.pkl from photos in dataset/
-├── recognize_faces.py      # Terminal version — live recognition + attendance marking
-├── attendance.py           # Handles writing to attendance.csv, prevents duplicate marks per day
-├── attendance_ui.py        # Tkinter UI with Start / Stop / Exit buttons
-├── day1_2_webcam_setup.py  # Early-stage webcam test script
-├── day3_face_detection.py  # Early-stage face detection test script
-├── .gitignore
-└── README.md
+
+Activate it on **Windows PowerShell**:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
 ```
 
-The following are **not included in this repo** (see `.gitignore`) since they contain personal data or are auto-downloaded:
-- `dataset/` — student face photos
-- `embeddings.pkl` — face encodings built from those photos
-- `attendance.csv` — attendance records
-- `face_detection_yunet.onnx`, `face_recognition_sface.onnx` — model files (auto-download on first run)
+Or on **macOS/Linux**:
 
-## Setup
-
-1. Clone the repo:
-   ```
-   git clone https://github.com/theamanlab/smart-attendance-system.git
-   cd smart-attendance-system
-   ```
-
-2. Install dependencies:
-   ```
-   pip install opencv-python numpy pillow
-   ```
-
-3. Create a `dataset` folder with one subfolder per person, each containing 2–4 clear, front-facing photos:
-   ```
-   dataset/
-     Aman/
-       photo1.jpg
-       photo2.jpg
-     Priya/
-       photo1.jpg
-   ```
-
-4. Build the face encodings (run once, or whenever you add a new person):
-   ```
-   python enroll_faces.py
-   ```
-
-## Usage
-
-**Option A — Simple UI (recommended):**
+```bash
+source .venv/bin/activate
 ```
+
+### 2. Install dependencies
+
+```bash
+python -m pip install -r requirements.txt
+python -m tkinter
+```
+
+The second command should open a small window; close it before continuing. Tkinter is supplied with many Python installations but may require an OS package on Linux. This project needs OpenCV's desktop window support; use `opencv-python`, not a headless build.
+
+Dependencies are currently unpinned. A tested version matrix and lock file remain future work.
+
+### 3. Prepare enrollment photos
+
+Create folders such as `dataset/Person_A/` and `dataset/Person_B/`. Put 2–4 clear JPG, JPEG, or PNG photos in each folder.
+
+Use one consenting person per image, varied lighting, and a clear face. The folder name becomes the attendance name. **If a photo contains multiple faces, the current code selects the largest one**, so inspect enrollment images carefully.
+
+### 4. Build reference embeddings
+
+```bash
+python enroll_faces.py
+```
+
+This downloads missing YuNet and SFace model files and creates `embeddings.pkl`. Check the terminal output for skipped images and confirm that at least one person was enrolled. Re-run enrollment whenever you change the dataset, then restart the recognition app.
+
+### 5. Start recognition
+
+**Desktop interface:**
+
+```bash
 python attendance_ui.py
 ```
-Click **Start** to begin recognition, **Stop** to pause, **Exit** to close. Recognized names appear in the on-screen log and are saved to `attendance.csv`.
 
-**Option B — Terminal version:**
-```
+Click **Start** to open the camera, **Stop** to pause, and **Exit** to close.
+
+**OpenCV window:**
+
+```bash
 python recognize_faces.py
 ```
-Press `q` to quit.
 
-Either way, the first run will auto-download the two required model files (~30MB total) — after that it works offline.
+Press **q** to quit. After both model files are downloaded and enrollment is complete, recognition can run offline.
 
-## How Attendance Marking Works
+## Repository guide
 
-- Each recognized face is matched against the enrolled dataset using cosine similarity, with a threshold based on the SFace model's recommended value.
-- A person is only marked **once per calendar date** — running the app multiple times in one day won't create duplicate rows, but a new day will always create a fresh entry.
-- Output is a simple CSV: `Name, Date, Time`.
+| File | Responsibility |
+| --- | --- |
+| `face_utils.py` | Model downloads, detection, alignment, embeddings, and similarity comparison |
+| `enroll_faces.py` | Enrollment from labeled photo folders |
+| `recognize_faces.py` | Live OpenCV recognition loop |
+| `attendance_ui.py` | Tkinter application |
+| `attendance.py` | CSV creation and duplicate checking |
+| `day1_2_webcam_setup.py` | Earlier webcam experiment |
+| `day3_face_detection.py` | Earlier detection experiment |
+| `requirements.txt` | Third-party Python dependencies |
+| [docs/EVALUATION.md](docs/EVALUATION.md) | Planned evaluation procedure and results template |
 
-## Known Limitations
+Generated files are excluded from version control: `dataset/`, `embeddings.pkl`, `attendance.csv`, and the two ONNX model files.
 
-- Recognition accuracy depends on dataset photo quality (front-facing, decent lighting works best).
-- Currently single-camera only (webcam index 0).
-- No admin panel yet — enrolling new people requires re-running `enroll_faces.py`.
+## Example output
+
+Illustrative CSV, not a measured test result:
+
+```csv
+Name,Date,Time
+Person_A,2026-11-17,09:00:00
+Person_B,2026-11-17,09:01:30
+```
+
+Dates and times use the computer's local clock.
+
+## Limitations
+
+- **No measured performance yet:** Accuracy, false accepts, false rejects, latency, and FPS need controlled evaluation. See the [evaluation plan](docs/EVALUATION.md).
+- **No liveness detection:** Photos or screens may fool the system; it is not suitable for identity verification or consequential attendance decisions without further safeguards and human review.
+- **Single default webcam:** Camera index `0` and a requested resolution of 640 × 480 are hardcoded. Cameras returning another resolution may require the detector input size to be updated.
+- **Session crossing midnight:** The in-memory cache tracks names rather than name/date pairs. Restart the application on a new day to allow a fresh attendance entry for an already-seen person.
+- **Single-process storage:** CSV writes are not coordinated across concurrent application instances. Run one instance at a time.
+- **Model download recovery:** Failed downloads can leave an incomplete file. If model loading fails, remove the affected ONNX file and retry with a working connection.
+- **Enrollment quality:** Poor lighting, pose changes, occlusion, and incorrect enrollment images can cause errors. Empty enrollment results should be corrected before running recognition.
+
+## Data handling
+
+Use only enrollment images you have permission to process. Keep photos, embeddings, and attendance records local and out of screenshots or commits. Embeddings are biometric data, not anonymized records.
+
+Only load an `embeddings.pkl` file generated by your own trusted enrollment run: Python pickle can execute code when loading an untrusted file. Removing a person requires removing their photo folder and rebuilding the embeddings; existing CSV records must be handled separately.
+
+## Next improvements
+
+- [ ] Publish measured recognition and latency results using held-out images.
+- [ ] Add a short demo with consenting participants or appropriately anonymized visuals.
+- [ ] Make camera selection and similarity thresholds configurable.
+- [ ] Handle date rollover, actual camera dimensions, and interrupted downloads.
+- [ ] Add automated tests for attendance and recognition decision logic.
+- [ ] Record tested dependency versions and provide a lock file.
+
+## Model credits
+
+The project uses pretrained [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) and [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) models from OpenCV Zoo. Consult the upstream model directories for their documentation and license terms.
